@@ -199,6 +199,7 @@ typedef void (^AlertViewCompletionHandler)(void);
 			self->playbackViewController = [[AVPlayerDemoPlaybackViewController alloc] init];
 		}
 		
+#warning Currently using a static URL.  Be sure to change this to the correct URL when we have it.
         NSURL *mediaURL = [NSURL URLWithString:@"http://code.generalui.com/posta.mov"];
         
 		[self.playbackViewController setURL:mediaURL];

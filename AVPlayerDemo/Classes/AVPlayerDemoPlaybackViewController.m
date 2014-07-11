@@ -49,6 +49,7 @@
 #import "AVPlayerDemoPlaybackViewController.h"
 #import "AVPlayerDemoPlaybackView.h"
 #import "AVPlayerDemoMetadataViewController.h"
+#import "MYAudioTapProcessor.h"
 
 @interface AVPlayerDemoPlaybackViewController ()
 - (void)play:(id)sender;
@@ -72,9 +73,14 @@
 - (void)syncPlayPauseButtons;
 - (void)setURL:(NSURL*)URL;
 - (NSURL*)URL;
+
+@property (readonly, strong, nonatomic) id playerTimeObserver;
+@property (readonly, strong, nonatomic) id playerItemDidPlayToEndTimeObserver;
+@property (nonatomic, strong) MYAudioTapProcessor *audioTapProcessor;
+
 @end
 
-@interface AVPlayerDemoPlaybackViewController (Player)
+@interface AVPlayerDemoPlaybackViewController (Player) <MYAudioTabProcessorDelegate>
 - (void)removePlayerTimeObserver;
 - (CMTime)playerItemDuration;
 - (BOOL)isPlaying;
@@ -744,6 +750,7 @@ static void *AVPlayerDemoPlaybackViewControllerCurrentItemObservationContext = &
 		[self syncPlayPauseButtons];
 
         AVPlayerItemStatus status = [[change objectForKey:NSKeyValueChangeNewKey] integerValue];
+        NSLog(@"status: %d", status);
         switch (status)
         {
             /* Indicates that the status of the player is not yet known because 
@@ -768,6 +775,14 @@ static void *AVPlayerDemoPlaybackViewControllerCurrentItemObservationContext = &
                 
                 [self enableScrubber];
                 [self enablePlayerButtons];
+                
+                // Add audio mix with audio tap processor to current player item.
+                AVAudioMix *audioMix = self.audioTapProcessor.audioMix;
+                if (audioMix)
+                {
+                    // Add audio mix with first audio track.
+                    self.player.currentItem.audioMix = audioMix;
+                }
             }
             break;
                 
@@ -817,6 +832,36 @@ static void *AVPlayerDemoPlaybackViewControllerCurrentItemObservationContext = &
 	}
 }
 
+#pragma mark - Audio Processing Tap
+#pragma mark
+
+- (MYAudioTapProcessor *)audioTapProcessor
+{
+	if (!_audioTapProcessor)
+	{
+		AVAssetTrack *firstAudioAssetTrack;
+		for (AVAssetTrack *assetTrack in self.mPlayer.currentItem.asset.tracks)
+		{
+			if ([assetTrack.mediaType isEqualToString:AVMediaTypeAudio])
+			{
+				firstAudioAssetTrack = assetTrack;
+				break;
+			}
+		}
+		if (firstAudioAssetTrack)
+		{
+			_audioTapProcessor = [[MYAudioTapProcessor alloc] initWithAudioAssetTrack:firstAudioAssetTrack];
+			_audioTapProcessor.delegate = self;
+		}
+	}
+	return _audioTapProcessor;
+}
+
+#pragma mark - Audio Processing Tap Protocol 
+
+- (void)audioTabProcessor:(MYAudioTapProcessor *)audioTabProcessor hasNewLeftChannelValue:(float)leftChannelValue rightChannelValue:(float)rightChannelValue {
+    
+}
 
 @end
 

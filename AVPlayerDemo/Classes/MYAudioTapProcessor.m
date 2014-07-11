@@ -136,70 +136,6 @@ static OSStatus AU_RenderCallback(void *inRefCon, AudioUnitRenderActionFlags *io
 	return _audioMix;
 }
 
-- (void)setCenterFrequency:(float)centerFrequency
-{
-	if (_centerFrequency != centerFrequency)
-	{
-		_centerFrequency = centerFrequency;
-		
-		AVAudioMix *audioMix = self.audioMix;
-		if (audioMix)
-		{
-			// Get pointer to Audio Unit stored in MTAudioProcessingTap context.
-			MTAudioProcessingTapRef audioProcessingTap = ((AVMutableAudioMixInputParameters *)audioMix.inputParameters[0]).audioTapProcessor;
-			AVAudioTapProcessorContext *context = (AVAudioTapProcessorContext *)MTAudioProcessingTapGetStorage(audioProcessingTap);
-			AudioUnit audioUnit = context->audioUnit;
-			if (audioUnit)
-			{
-				// Update center frequency of bandpass filter Audio Unit.
-				Float32 newCenterFrequency = (20.0f + ((context->sampleRate * 0.5f) - 20.0f) * self.centerFrequency); // Global, Hz, 20->(SampleRate/2), 5000
-				OSStatus status = AudioUnitSetParameter(audioUnit, kBandpassParam_CenterFrequency, kAudioUnitScope_Global, 0, newCenterFrequency, 0);
-				if (noErr != status)
-					NSLog(@"AudioUnitSetParameter(kBandpassParam_CenterFrequency): %d", (int)status);
-			}
-		}
-	}
-}
-
-- (void)setBandwidth:(float)bandwidth
-{
-	if (_bandwidth != bandwidth)
-	{
-		_bandwidth = bandwidth;
-		
-		AVAudioMix *audioMix = self.audioMix;
-		if (audioMix)
-		{
-			// Get pointer to Audio Unit stored in MTAudioProcessingTap context.
-			MTAudioProcessingTapRef audioProcessingTap = ((AVMutableAudioMixInputParameters *)audioMix.inputParameters[0]).audioTapProcessor;
-			AVAudioTapProcessorContext *context = (AVAudioTapProcessorContext *)MTAudioProcessingTapGetStorage(audioProcessingTap);
-			AudioUnit audioUnit = context->audioUnit;
-			if (audioUnit)
-			{
-				// Update bandwidth of bandpass filter Audio Unit.
-				Float32 newBandwidth = (100.0f + 11900.0f * self.bandwidth);
-				OSStatus status = AudioUnitSetParameter(audioUnit, kBandpassParam_Bandwidth, kAudioUnitScope_Global, 0, newBandwidth, 0); // Global, Cents, 100->12000, 600
-				if (noErr != status)
-					NSLog(@"AudioUnitSetParameter(kBandpassParam_Bandwidth): %d", (int)status);
-			}
-		}
-	}
-}
-
-#pragma mark -
-
-- (void)updateLeftChannelVolume:(float)leftChannelVolume rightChannelVolume:(float)rightChannelVolume
-{
-	@autoreleasepool
-	{
-		dispatch_async(dispatch_get_main_queue(), ^{
-			// Forward left and right channel volume to delegate.
-			if (self.delegate && [self.delegate respondsToSelector:@selector(audioTabProcessor:hasNewLeftChannelValue:rightChannelValue:)])
-				[self.delegate audioTabProcessor:self hasNewLeftChannelValue:leftChannelVolume rightChannelValue:rightChannelVolume];
-		});
-	}
-}
-
 @end
 
 #pragma mark - MTAudioProcessingTap Callbacks
@@ -348,39 +284,6 @@ static void tap_ProcessCallback(MTAudioProcessingTapRef tap, CMItemCount numberF
 		NSLog(@"Unsupported tap processing format.");
 		return;
 	}
-    
-	MYAudioTapProcessor *self = ((__bridge MYAudioTapProcessor *)context->self);
-	
-	// Calculate root mean square (RMS) for left and right audio channel.
-	for (UInt32 i = 0; i < bufferListInOut->mNumberBuffers; i++)
-	{
-		AudioBuffer *pBuffer = &bufferListInOut->mBuffers[i];
-		UInt32 cSamples = numberFrames * (context->isNonInterleaved ? 1 : pBuffer->mNumberChannels);
-		
-		float *pData = (float *)pBuffer->mData;
-		
-		float rms = 0.0f;
-		for (UInt32 j = 0; j < cSamples; j++)
-		{
-			rms += pData[j] * pData[j];
-		}
-		if (cSamples > 0)
-		{
-			rms = sqrtf(rms / cSamples);
-		}
-		
-		if (0 == i)
-		{
-			context->leftChannelVolume = rms;
-		}
-		if (1 == i || (0 == i && 1 == bufferListInOut->mNumberBuffers))
-		{
-			context->rightChannelVolume = rms;
-		}
-	}
-	
-	// Pass calculated left and right channel volume to VU meters.
-	[self updateLeftChannelVolume:context->leftChannelVolume rightChannelVolume:context->rightChannelVolume];
 }
 
 #pragma mark - Audio Unit Callbacks
